@@ -18,6 +18,7 @@ public class BudgetAlertDAO {
 
     private final JdbcTemplate jdbc;
 
+    // Kiểm tra xem đã gửi cảnh báo cho ngân sách này chưa
     public boolean exists(UUID budgetId, UUID userId, int month, int year) {
         String sql = """
                     SELECT COUNT(*) FROM budget_alerts

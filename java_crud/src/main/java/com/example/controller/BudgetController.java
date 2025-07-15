@@ -54,7 +54,7 @@ public class BudgetController {
                 : ResponseEntity.status(404).body("Không tìm thấy ngân sách để xoá");
     }
 
-    // Lấy ngân sách theo ID
+    // Lấy ngân sách của người dùng theo ID
     @GetMapping("/user/{userId}/budget/{id}")
     public ResponseEntity<Budget> getBudgetDetail(
             @PathVariable UUID userId,
