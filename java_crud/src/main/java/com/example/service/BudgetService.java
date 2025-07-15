@@ -3,6 +3,7 @@ package com.example.service;
 import com.example.entity.Budget;
 import com.example.entity.BudgetAlert;
 import com.example.enums.TransactionCategory;
+import com.example.exception.BudgetAlreadyExistsException;
 import com.example.repository.BudgetAlertDAO;
 import com.example.repository.BudgetDAO;
 import com.example.repository.TransactionDAO;
@@ -26,6 +27,12 @@ public class BudgetService {
 
     // Tạo ngân sách
     public boolean createBudget(Budget b) {
+        boolean exists = budgetDAO.exists(b.getUserId(), b.getMonth(), b.getYear(), b.getCategory().name());
+        if (exists) {
+            throw new BudgetAlreadyExistsException("Ngân sách đã tồn tại cho tháng " + b.getMonth()
+                    + "/" + b.getYear() + " - loại: " + b.getCategory());
+        }
+
         b.setId(UUID.randomUUID());
         return budgetDAO.insert(b) > 0;
     }

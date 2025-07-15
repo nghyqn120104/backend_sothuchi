@@ -2,17 +2,17 @@ package com.example.repository;
 
 import com.example.entity.Budget;
 import com.example.mapper.BudgetMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.*;
 
 @Repository
+@RequiredArgsConstructor
 public class BudgetDAO {
-
-    @Autowired
-    private JdbcTemplate jdbc;
+    private final JdbcTemplate jdbc;
 
     // Thêm ngân sách
     public int insert(Budget b) {
@@ -73,4 +73,14 @@ public class BudgetDAO {
         String sql = "DELETE FROM budgets WHERE user_id = ?";
         jdbc.update(sql, id.toString());
     }
+
+    // Kiểm tra ngân sách đã tồn tại theo user, tháng, năm và category
+    // Dùng để tránh trùng lặp category khi thêm ngân sách
+    public boolean exists(UUID userId, int month, int year, String category) {
+        String sql = "SELECT COUNT(*) FROM budgets WHERE user_id = ? AND month = ? AND year = ? AND category = ?";
+        Integer count = jdbc.queryForObject(sql, Integer.class,
+                userId.toString(), month, year, category);
+        return count != null && count > 0;
+    }
+
 }
