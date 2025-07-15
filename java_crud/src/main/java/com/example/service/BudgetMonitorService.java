@@ -28,8 +28,8 @@ public class BudgetMonitorService {
     private final TransactionDAO transactionDAO;
     private final EmailService emailService;
 
-    // @Scheduled(cron = "0 0 8 * * ?")
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(cron = "0 0 8 * * ?")
+    // @Scheduled(fixedRate = 60000)
     public void autoCheckBudgetsDaily() {
         List<User> users = userDAO.findAll();
         LocalDate now = LocalDate.now();

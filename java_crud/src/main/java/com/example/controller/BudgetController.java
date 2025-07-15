@@ -6,6 +6,8 @@ import com.example.service.BudgetService;
 import lombok.RequiredArgsConstructor;
 
 import com.example.enums.TransactionCategory;
+import com.example.exception.BudgetAlreadyExistsException;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,9 +22,13 @@ public class BudgetController {
     // Tạo ngân sách
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Budget b) {
-        return budgetService.createBudget(b)
-                ? ResponseEntity.ok("Tạo ngân sách thành công")
-                : ResponseEntity.badRequest().body("Thất bại");
+        try {
+            boolean ok = budgetService.createBudget(b);
+            return ok ? ResponseEntity.ok("Tạo ngân sách thành công")
+                    : ResponseEntity.badRequest().body("Tạo thất bại");
+        } catch (BudgetAlreadyExistsException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     // Cập nhật ngân sách
