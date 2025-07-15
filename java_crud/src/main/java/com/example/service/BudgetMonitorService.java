@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.example.entity.User;
-import com.example.enums.TransactionCategory;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
