@@ -2,6 +2,7 @@ package com.example.service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.example.entity.User;
@@ -31,23 +32,56 @@ public class BudgetMonitorService {
     // @Scheduled(cron = "0 0 8 * * ?")
     @Scheduled(fixedRate = 60000)
     public void autoCheckBudgetsDaily() {
-        List<BudgetAlert> alerts = alertDAO.findAllStillExceeded();
+        List<User> users = userDAO.findAll();
+        LocalDate now = LocalDate.now();
 
-        for (BudgetAlert alert : alerts) {
-            double spent = alert.getCategory().equals("ALL")
-                    ? transactionDAO.sumAllExpensesByUserMonth(alert.getUserId(), alert.getMonth(), alert.getYear())
-                    : transactionDAO.sumByUserCategoryAndMonth(alert.getUserId(),
-                            TransactionCategory.valueOf(alert.getCategory()), alert.getMonth(), alert.getYear());
+        for (User user : users) {
+            UUID userId = user.getId();
+            String email = user.getEmail();
 
-            if (spent > 0) {
-                // Gửi nhắc lại
-                String email = userDAO.findById(alert.getUserId()).get().getEmail();
-                emailService.sendBudgetWarning(
-                        email,
-                        "⚠️ Nhắc lại: Bạn vẫn đang vượt ngân sách " + alert.getCategory(),
-                        "... nội dung tương tự ...");
-            } else {
-                alertDAO.markAsResolved(alert.getId());
+            List<Budget> budgets = budgetDAO.findByUserAndMonthYear(userId, now.getMonthValue(), now.getYear());
+
+            for (Budget b : budgets) {
+                double spent = b.getCategory().name().equals("ALL")
+                        ? transactionDAO.sumAllExpensesByUserMonth(userId, now.getMonthValue(), now.getYear())
+                        : transactionDAO.sumByUserCategoryAndMonth(userId, b.getCategory(), now.getMonthValue(),
+                                now.getYear());
+
+                if (spent > b.getAmount()) {
+                    // Nếu chưa từng gửi alert
+                    boolean alreadyAlerted = alertDAO.exists(b.getId(), userId, now.getMonthValue(), now.getYear());
+
+                    if (!alreadyAlerted) {
+                        // Gửi lần đầu
+                        emailService.sendBudgetWarning(email,
+                                "⚠️ Cảnh báo vượt ngân sách: " + b.getCategory(),
+                                String.format("Bạn đã chi %.0f₫ / ngân sách %.0f₫ cho %s (tháng %d/%d)",
+                                        spent, b.getAmount(), b.getCategory(), now.getMonthValue(), now.getYear()));
+
+                        // Lưu alert
+                        BudgetAlert alert = new BudgetAlert();
+                        alert.setId(UUID.randomUUID());
+                        alert.setBudgetId(b.getId());
+                        alert.setUserId(userId);
+                        alert.setCategory(b.getCategory().name());
+                        alert.setMonth(now.getMonthValue());
+                        alert.setYear(now.getYear());
+                        alert.setAlertDate(now);
+                        alert.setStillExceeded(true);
+                        alertDAO.insert(alert);
+                    } else {
+                        // Gửi lại nhắc nhở nếu đã gửi rồi
+                        emailService.sendBudgetWarning(email,
+                                "⚠️ Nhắc lại: Bạn vẫn vượt ngân sách " + b.getCategory(),
+                                String.format("Bạn đã chi %.0f₫ / ngân sách %.0f₫ cho %s (tháng %d/%d)",
+                                        spent, b.getAmount(), b.getCategory(), now.getMonthValue(), now.getYear()));
+                    }
+                } else {
+                    // Nếu đã từng gửi cảnh báo mà giờ đã hợp lệ → mark resolved
+                    Optional<BudgetAlert> existing = alertDAO.findOne(b.getId(), userId, now.getMonthValue(),
+                            now.getYear());
+                    existing.ifPresent(a -> alertDAO.markAsResolved(a.getId()));
+                }
             }
         }
     }
