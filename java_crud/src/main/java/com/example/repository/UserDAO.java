@@ -64,4 +64,10 @@ public class UserDAO {
         return jdbcTemplate.update("DELETE FROM users WHERE id = ?", id.toString());
     }
 
+    // Phân trang: lấy user theo page (limit & offset)
+    public List<User> findPaged(int limit, int offset) {
+        String sql = "SELECT * FROM users ORDER BY id LIMIT ? OFFSET ?";
+        return jdbcTemplate.query(sql, new UserMapper(), limit, offset);
+    }
+
 }

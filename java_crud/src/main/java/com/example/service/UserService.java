@@ -76,4 +76,9 @@ public class UserService {
         }
         return Optional.empty();
     }
+
+    public List<User> getPaged(int limit, int offset) {
+        return userDao.findPaged(limit, offset);
+    }
+
 }
