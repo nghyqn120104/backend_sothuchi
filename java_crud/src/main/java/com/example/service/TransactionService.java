@@ -6,6 +6,7 @@ import com.example.repository.TransactionDAO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,6 +59,12 @@ public class TransactionService {
         }
 
         return transactionDAO.sumByUserCategoryAndMonth(userId, transactionCategory, month, year);
+    }
+
+    public List<Transaction> searchTransactions(UUID userId,
+            LocalDate startDate, LocalDate endDate,
+            Double minAmount, Double maxAmount) {
+        return transactionDAO.search(userId, startDate, endDate, minAmount, maxAmount);
     }
 
 }

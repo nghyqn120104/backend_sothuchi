@@ -1,5 +1,6 @@
 package com.example.service;
 
+import com.example.dto.SpendingStatisticsDTO;
 import com.example.entity.Budget;
 import com.example.entity.BudgetAlert;
 import com.example.enums.TransactionCategory;
@@ -144,6 +145,11 @@ public class BudgetService {
                 "remaining", budget.getAmount() - spent,
                 "usageRate", usageRate,
                 "status", spent > budget.getAmount() ? "Vượt ngân sách tổng ⚠️" : "OK ✅");
+    }
+
+    // Lấy thống kê chi tiêu theo tháng
+    public SpendingStatisticsDTO getSpendingStatistics(UUID userId, int month, int year) {
+        return transactionDAO.getSpendingStatistics(userId, month, year);
     }
 
 }
