@@ -2,7 +2,9 @@ package com.example.controller;
 
 import com.example.dto.LoginRequestDTO;
 import com.example.dto.LoginResponseDTO;
+import com.example.dto.SpendingStatisticsDTO;
 import com.example.entity.User;
+import com.example.service.BudgetService;
 import com.example.service.UserService;
 
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.*;
 @RequestMapping("/api/users")
 public class UserController {
     private final UserService userService;
+    private final BudgetService budgetService;
 
     @GetMapping
     public List<User> getAll() {
@@ -63,4 +66,14 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Sai tài khoản hoặc mật khẩu");
         }
     }
+
+    @GetMapping("/user/{userId}/statistics")
+    public ResponseEntity<?> getSpendingStatistics(
+            @PathVariable UUID userId,
+            @RequestParam int month,
+            @RequestParam int year) {
+        SpendingStatisticsDTO stats = budgetService.getSpendingStatistics(userId, month, year);
+        return ResponseEntity.ok(stats);
+    }
+
 }

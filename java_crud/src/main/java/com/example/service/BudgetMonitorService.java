@@ -3,10 +3,6 @@ package com.example.service;
 import com.example.entity.Budget;
 import com.example.entity.BudgetAlert;
 import com.example.entity.User;
-import com.example.repository.BudgetAlertDAO;
-import com.example.repository.BudgetDAO;
-import com.example.repository.TransactionDAO;
-import com.example.repository.UserDAO;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,10 +15,10 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class BudgetMonitorService {
-    private final UserDAO userDAO;
-    private final BudgetDAO budgetDAO;
-    private final BudgetAlertDAO alertDAO;
-    private final TransactionDAO transactionDAO;
+    private final UserService userService;
+    private final BudgetService budgetService;
+    private final BudgetAlertService alertService;
+    private final TransactionService transactionService;
     private final EmailService emailService;
 
     public void checkBudgets(LocalDate now) {
@@ -32,7 +28,7 @@ public class BudgetMonitorService {
         int pageSize = 100;
         int offset = 0;
         while (true) {
-            List<User> users = userDAO.findPaged(pageSize, offset);
+            List<User> users = userService.getPaged(pageSize, offset);
             if (users.isEmpty())
                 break;
 
@@ -42,23 +38,25 @@ public class BudgetMonitorService {
 
             offset += pageSize;
         }
-
     }
 
     private void checkBudgetForUser(User user, LocalDate now, int month, int year) {
         UUID userId = user.getId();
         String email = user.getEmail();
-        List<Budget> budgets = budgetDAO.findByUserAndMonthYear(userId, month, year);
+        List<Budget> budgets = budgetService.filterBudgetsByUserAndMonthYear(userId, month, year);
 
         for (Budget b : budgets) {
             double spent = b.getCategory().name().equals("ALL")
-                    ? Optional.ofNullable(transactionDAO.sumAllExpensesByUserMonth(userId, month, year)).orElse(0.0)
+                    ? Optional.ofNullable(transactionService.sumAllExpensesByUserMonth(userId, month, year)).orElse(0.0)
                     : Optional
-                            .ofNullable(transactionDAO.sumByUserCategoryAndMonth(userId, b.getCategory(), month, year))
+                            .ofNullable(transactionService.sumByUserCategoryAndMonth(userId, b.getCategory().name(),
+                                    month, year))
                             .orElse(0.0);
 
             if (spent > b.getAmount()) {
-                boolean alreadyAlerted = alertDAO.exists(b.getId(), userId, month, year);
+                boolean alreadyAlerted = alertService.getStillExceededAlerts().stream()
+                        .anyMatch(a -> a.getBudgetId().equals(b.getId()) && a.getUserId().equals(userId)
+                                && a.getMonth() == month && a.getYear() == year);
 
                 if (!alreadyAlerted) {
                     emailService.sendBudgetWarning(
@@ -75,7 +73,7 @@ public class BudgetMonitorService {
                     alert.setYear(year);
                     alert.setAlertDate(now);
                     alert.setStillExceeded(true);
-                    alertDAO.insert(alert);
+                    alertService.createAlert(alert);
                 } else {
                     emailService.sendBudgetWarning(
                             email,
@@ -84,8 +82,10 @@ public class BudgetMonitorService {
                 }
 
             } else {
-                Optional<BudgetAlert> existing = alertDAO.findOne(b.getId(), userId, month, year);
-                existing.ifPresent(a -> alertDAO.markAsResolved(a.getId()));
+                Optional<BudgetAlert> existing = alertService.getAlertsForUser(userId).stream()
+                        .filter(a -> a.getBudgetId().equals(b.getId()) && a.getMonth() == month && a.getYear() == year)
+                        .findFirst();
+                existing.ifPresent(a -> alertService.resolveAlert(a.getId()));
             }
         }
     }
