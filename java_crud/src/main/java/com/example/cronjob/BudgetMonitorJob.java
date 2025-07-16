@@ -13,9 +13,9 @@ public class BudgetMonitorJob {
     private final BudgetMonitorService budgetMonitorService;
 
     // Chạy lúc 8h sáng mỗi ngày
-    // @Scheduled(cron = "0 0 8 * * ?")
+    @Scheduled(cron = "0 0 8 * * ?")
     // Dùng để test
-    @Scheduled(fixedRate = 60000)
+    // @Scheduled(fixedRate = 60000)
     public void runDailyBudgetCheck() {
         budgetMonitorService.checkBudgets(LocalDate.now());
     }

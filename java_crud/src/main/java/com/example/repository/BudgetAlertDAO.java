@@ -66,4 +66,9 @@ public class BudgetAlertDAO {
         return result.isEmpty() ? Optional.empty() : Optional.of(result.get(0));
     }
 
+    public List<BudgetAlert> findByUserId(UUID userId) {
+        String sql = "SELECT * FROM budget_alerts WHERE user_id = ?";
+        return jdbc.query(sql, new BudgetAlertMapper(), userId.toString());
+    }
+
 }
