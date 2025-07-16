@@ -1,10 +1,5 @@
 package com.example.service;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import com.example.entity.Budget;
 import com.example.entity.BudgetAlert;
 import com.example.entity.User;
@@ -14,8 +9,12 @@ import com.example.repository.TransactionDAO;
 import com.example.repository.UserDAO;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -26,61 +25,67 @@ public class BudgetMonitorService {
     private final TransactionDAO transactionDAO;
     private final EmailService emailService;
 
-    // Chạy 8h sáng mỗi ngày
-    @Scheduled(cron = "0 0 8 * * ?")
-    // Dùng để test mỗi 60s
-    // @Scheduled(fixedRate = 60000)
-    public void autoCheckBudgetsDaily() {
-        List<User> users = userDAO.findAll();
-        LocalDate now = LocalDate.now();
+    public void checkBudgets(LocalDate now) {
         int month = now.getMonthValue();
         int year = now.getYear();
 
-        for (User user : users) {
-            UUID userId = user.getId();
-            String email = user.getEmail();
-            List<Budget> budgets = budgetDAO.findByUserAndMonthYear(userId, month, year);
+        int pageSize = 100;
+        int offset = 0;
+        while (true) {
+            List<User> users = userDAO.findPaged(pageSize, offset);
+            if (users.isEmpty())
+                break;
 
-            for (Budget b : budgets) {
-                double spent = b.getCategory().name().equals("ALL")
-                        ? transactionDAO.sumAllExpensesByUserMonth(userId, month, year)
-                        : transactionDAO.sumByUserCategoryAndMonth(userId, b.getCategory(), month, year);
+            for (User user : users) {
+                checkBudgetForUser(user, now, month, year);
+            }
 
-                if (spent > b.getAmount()) {
-                    boolean alreadyAlerted = alertDAO.exists(b.getId(), userId, month, year);
+            offset += pageSize;
+        }
 
-                    if (!alreadyAlerted) {
-                        // Gửi cảnh báo lần đầu
-                        emailService.sendBudgetWarning(
-                                email,
-                                "⚠️ Bạn đã vượt ngân sách: " + b.getCategory().name(),
-                                buildBudgetAlertBody(user, b, spent, month, year));
+    }
 
-                        // Ghi nhận alert
-                        BudgetAlert alert = new BudgetAlert();
-                        alert.setId(UUID.randomUUID());
-                        alert.setBudgetId(b.getId());
-                        alert.setUserId(userId);
-                        alert.setCategory(b.getCategory().name());
-                        alert.setMonth(month);
-                        alert.setYear(year);
-                        alert.setAlertDate(now);
-                        alert.setStillExceeded(true);
-                        alertDAO.insert(alert);
+    private void checkBudgetForUser(User user, LocalDate now, int month, int year) {
+        UUID userId = user.getId();
+        String email = user.getEmail();
+        List<Budget> budgets = budgetDAO.findByUserAndMonthYear(userId, month, year);
 
-                    } else {
-                        // Gửi nhắc lại nếu đã từng cảnh báo
-                        emailService.sendBudgetWarning(
-                                email,
-                                "⚠️ Nhắc lại: Bạn vẫn vượt ngân sách " + b.getCategory().name(),
-                                buildBudgetAlertBody(user, b, spent, month, year));
-                    }
+        for (Budget b : budgets) {
+            double spent = b.getCategory().name().equals("ALL")
+                    ? Optional.ofNullable(transactionDAO.sumAllExpensesByUserMonth(userId, month, year)).orElse(0.0)
+                    : Optional
+                            .ofNullable(transactionDAO.sumByUserCategoryAndMonth(userId, b.getCategory(), month, year))
+                            .orElse(0.0);
 
+            if (spent > b.getAmount()) {
+                boolean alreadyAlerted = alertDAO.exists(b.getId(), userId, month, year);
+
+                if (!alreadyAlerted) {
+                    emailService.sendBudgetWarning(
+                            email,
+                            "⚠️ Bạn đã vượt ngân sách: " + b.getCategory().name(),
+                            buildBudgetAlertBody(user, b, spent, month, year));
+
+                    BudgetAlert alert = new BudgetAlert();
+                    alert.setId(UUID.randomUUID());
+                    alert.setBudgetId(b.getId());
+                    alert.setUserId(userId);
+                    alert.setCategory(b.getCategory().name());
+                    alert.setMonth(month);
+                    alert.setYear(year);
+                    alert.setAlertDate(now);
+                    alert.setStillExceeded(true);
+                    alertDAO.insert(alert);
                 } else {
-                    // Nếu chi tiêu đã hợp lý => đánh dấu alert đã resolved
-                    Optional<BudgetAlert> existing = alertDAO.findOne(b.getId(), userId, month, year);
-                    existing.ifPresent(a -> alertDAO.markAsResolved(a.getId()));
+                    emailService.sendBudgetWarning(
+                            email,
+                            "⚠️ Nhắc lại: Bạn vẫn vượt ngân sách " + b.getCategory().name(),
+                            buildBudgetAlertBody(user, b, spent, month, year));
                 }
+
+            } else {
+                Optional<BudgetAlert> existing = alertDAO.findOne(b.getId(), userId, month, year);
+                existing.ifPresent(a -> alertDAO.markAsResolved(a.getId()));
             }
         }
     }
