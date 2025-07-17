@@ -3,6 +3,7 @@ package com.example.service;
 import com.example.dto.SpendingStatisticsDTO;
 import com.example.entity.Budget;
 import com.example.entity.BudgetAlert;
+import com.example.entity.User;
 import com.example.enums.TransactionCategory;
 import com.example.exception.BudgetAlreadyExistsException;
 import com.example.repository.BudgetAlertDAO;
@@ -26,7 +27,6 @@ public class BudgetService {
     private final TransactionDAO transactionDAO;
     private final EmailService emailService;
 
-    // Tạo ngân sách
     public boolean createBudget(Budget b) {
         boolean exists = budgetDAO.exists(b.getUserId(), b.getMonth(), b.getYear(), b.getCategory().name());
         if (exists) {
@@ -38,32 +38,26 @@ public class BudgetService {
         return budgetDAO.insert(b) > 0;
     }
 
-    // Cập nhật ngân sách
     public boolean updateBudget(Budget b) {
         return budgetDAO.update(b) > 0;
     }
 
-    // Xoá ngân sách
     public boolean deleteBudget(UUID id) {
         return budgetDAO.delete(id) > 0;
     }
 
-    // Lấy ngân sách theo ID
     public Optional<Budget> getById(UUID id) {
         return budgetDAO.findById(id);
     }
 
-    // Lấy tất cả ngân sách theo user
     public List<Budget> getAllBudgets(UUID userId) {
         return budgetDAO.findAllByUser(userId);
     }
 
-    // Lọc theo tháng, năm
     public List<Budget> filterBudgetsByUserAndMonthYear(UUID userId, int month, int year) {
         return budgetDAO.findByUserAndMonthYear(userId, month, year);
     }
 
-    // So sánh ngân sách với thực chi
     public Map<String, Object> compareWithActual(UUID userId, TransactionCategory category, int month, int year) {
         Optional<Budget> budgetOpt = budgetDAO.findOne(userId, month, year, category.name());
 
@@ -82,39 +76,10 @@ public class BudgetService {
                 ? Math.round((spent / budget.getAmount()) * 10000.0) / 100.0
                 : 0;
 
-        BudgetAlert alert = new BudgetAlert();
         if (spent > budget.getAmount()) {
-            boolean alreadyAlerted = alertDAO.exists(budget.getId(), userId, month, year);
-
-            if (!alreadyAlerted) {
-                // Gửi email lần đầu
-                String email = userDAO.findById(userId)
-                        .map(user -> user.getEmail())
-                        .orElse(null);
-
-                if (email != null && !email.isEmpty()) {
-                    emailService.sendBudgetWarning(email,
-                            "⚠️ Cảnh báo vượt ngân sách " + category,
-                            "Bạn đã vượt quá ngân sách cho loại chi tiêu " + category +
-                                    " trong tháng " + month + "/" + year + ".");
-                }
-
-                // Lưu alert
-                alert.setId(UUID.randomUUID());
-                alert.setBudgetId(budget.getId());
-                alert.setUserId(userId);
-                alert.setCategory(category.name());
-                alert.setMonth(month);
-                alert.setYear(year);
-                alert.setAlertDate(LocalDate.now());
-                alert.setStillExceeded(true);
-                alertDAO.insert(alert);
-            }
-
+            handleBudgetExceeded(userId, budget, category, month, year);
         } else {
-            // Nếu đã từng cảnh báo => đánh dấu đã giải quyết
-            Optional<BudgetAlert> existing = alertDAO.findOne(budget.getId(), userId, month, year);
-            existing.ifPresent(a -> alertDAO.markAsResolved(a.getId()));
+            resolveAlertIfAny(budget.getId(), userId, month, year);
         }
 
         return Map.of(
@@ -122,10 +87,10 @@ public class BudgetService {
                 "actualSpent", spent,
                 "remaining", budget.getAmount() - spent,
                 "usageRate", usageRate,
-                "status", spent > budget.getAmount() ? "Vượt ngân sách ⚠️" : "OK ✅");
+                "status", spent == 0 ? "Chưa có giao dịch ❓"
+                        : (spent > budget.getAmount() ? "Vượt ngân sách ⚠️" : "OK ✅"));
     }
 
-    // So sánh ngân sách tổng với thực chi
     public Map<String, Object> compareAllBudget(UUID userId, int month, int year) {
         Optional<Budget> budgetOpt = budgetDAO.findOne(userId, month, year, "ALL");
 
@@ -144,12 +109,45 @@ public class BudgetService {
                 "actualSpent", spent,
                 "remaining", budget.getAmount() - spent,
                 "usageRate", usageRate,
-                "status", spent > budget.getAmount() ? "Vượt ngân sách tổng ⚠️" : "OK ✅");
+                "status", spent == 0 ? "Chưa có giao dịch ❓"
+                        : (spent > budget.getAmount() ? "Vượt ngân sách tổng ⚠️" : "OK ✅"));
     }
 
-    // Lấy thống kê chi tiêu theo tháng
     public SpendingStatisticsDTO getSpendingStatistics(UUID userId, int month, int year) {
         return transactionDAO.getSpendingStatistics(userId, month, year);
     }
 
+    // ==== PRIVATE HELPERS ====
+
+    private void handleBudgetExceeded(UUID userId, Budget budget, TransactionCategory category, int month, int year) {
+        boolean alreadyAlerted = alertDAO.exists(budget.getId(), userId, month, year);
+        if (alreadyAlerted)
+            return;
+
+        userDAO.findById(userId).map(User::getEmail).ifPresent(email -> {
+            if (!email.isEmpty()) {
+                emailService.sendBudgetWarning(email,
+                        "⚠️ Cảnh báo vượt ngân sách " + category,
+                        "Bạn đã vượt quá ngân sách cho loại chi tiêu " + category +
+                                " trong tháng " + month + "/" + year + ".");
+            }
+        });
+
+        BudgetAlert alert = new BudgetAlert();
+        alert.setId(UUID.randomUUID());
+        alert.setBudgetId(budget.getId());
+        alert.setUserId(userId);
+        alert.setCategory(category.name());
+        alert.setMonth(month);
+        alert.setYear(year);
+        alert.setAlertDate(LocalDate.now());
+        alert.setStillExceeded(true);
+
+        alertDAO.insert(alert);
+    }
+
+    private void resolveAlertIfAny(UUID budgetId, UUID userId, int month, int year) {
+        alertDAO.findOne(budgetId, userId, month, year)
+                .ifPresent(a -> alertDAO.markAsResolved(a.getId()));
+    }
 }

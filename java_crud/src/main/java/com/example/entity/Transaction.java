@@ -19,4 +19,5 @@ public class Transaction {
     private TransactionType type;
     private TransactionCategory category; // thể loại (ăn uống, học tập...)
     private UUID userId;
+    private UUID accountId;
 }

@@ -30,13 +30,17 @@ public class TransactionController {
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Transaction t) {
         boolean ok = transactionService.create(t);
-        return ok ? ResponseEntity.ok("Đã thêm giao dịch") : ResponseEntity.badRequest().body("Thêm thất bại");
+        return ok
+                ? ResponseEntity.ok("Đã thêm giao dịch")
+                : ResponseEntity.badRequest().body("Tài khoản không hợp lệ hoặc không thuộc về người dùng");
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable UUID id, @RequestBody Transaction transaction) {
         boolean ok = transactionService.update(id, transaction);
-        return ok ? ResponseEntity.ok("Cập nhật thành công") : ResponseEntity.badRequest().body("Cập nhật thất bại");
+        return ok
+                ? ResponseEntity.ok("Cập nhật thành công")
+                : ResponseEntity.badRequest().body("Tài khoản không hợp lệ hoặc không thuộc về người dùng");
     }
 
     @DeleteMapping("/{id}")
@@ -76,5 +80,10 @@ public class TransactionController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(data);
     }
-    
+
+    @GetMapping("/user/{userId}/account/{accountId}")
+    public List<Transaction> getByUserAndAccount(@PathVariable UUID userId, @PathVariable UUID accountId) {
+        return transactionService.getByUserAndAccount(userId, accountId);
+    }
+
 }
