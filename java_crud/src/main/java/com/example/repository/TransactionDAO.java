@@ -1,12 +1,7 @@
 package com.example.repository;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import java.util.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -23,12 +18,15 @@ public class TransactionDAO {
     private final JdbcTemplate jdbcTemplate;
 
     public List<Transaction> findAllByUser(UUID userId) {
-        String sql = "SELECT * FROM transactions where user_id = ?";
+        String sql = "SELECT * FROM transactions WHERE user_id = ?";
         return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString());
     }
 
     public int insert(Transaction t) {
-        String sql = "INSERT INTO transactions (id, description, amount, date, type, category, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = """
+                    INSERT INTO transactions (id, description, amount, date, type, category, user_id, account_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """;
         return jdbcTemplate.update(sql,
                 t.getId().toString(),
                 t.getDescription(),
@@ -36,17 +34,23 @@ public class TransactionDAO {
                 t.getDate(),
                 t.getType().name(),
                 t.getCategory().name(),
-                t.getUserId().toString());
+                t.getUserId().toString(),
+                t.getAccountId() != null ? t.getAccountId().toString() : null);
     }
 
     public int update(Transaction t) {
-        String sql = "UPDATE transactions SET description = ?, amount = ?, date = ?, type = ?, category = ? WHERE id = ?";
+        String sql = """
+                    UPDATE transactions
+                    SET description = ?, amount = ?, date = ?, type = ?, category = ?, account_id = ?
+                    WHERE id = ?
+                """;
         return jdbcTemplate.update(sql,
                 t.getDescription(),
                 t.getAmount(),
                 t.getDate(),
                 t.getType().name(),
                 t.getCategory().name(),
+                t.getAccountId() != null ? t.getAccountId().toString() : null,
                 t.getId().toString());
     }
 
@@ -73,7 +77,6 @@ public class TransactionDAO {
                     WHERE user_id = ? AND category = ? AND type = 'EXPENSE'
                           AND MONTH(date) = ? AND YEAR(date) = ?
                 """;
-
         Double total = jdbcTemplate.queryForObject(sql, Double.class, userId.toString(), category.name(), month, year);
         return total != null ? total : 0.0;
     }
@@ -85,17 +88,18 @@ public class TransactionDAO {
                     WHERE user_id = ? AND type = 'EXPENSE'
                           AND MONTH(date) = ? AND YEAR(date) = ?
                 """;
-
         Double total = jdbcTemplate.queryForObject(sql, Double.class, userId.toString(), month, year);
         return total != null ? total : 0.0;
     }
 
     public SpendingStatisticsDTO getSpendingStatistics(UUID userId, int month, int year) {
-        String sql = "SELECT category, SUM(amount) AS total " +
-                "FROM transactions " +
-                "WHERE user_id = ? AND type = 'EXPENSE' " +
-                "AND MONTH(date) = ? AND YEAR(date) = ? " +
-                "GROUP BY category";
+        String sql = """
+                    SELECT category, SUM(amount) AS total
+                    FROM transactions
+                    WHERE user_id = ? AND type = 'EXPENSE'
+                          AND MONTH(date) = ? AND YEAR(date) = ?
+                    GROUP BY category
+                """;
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, userId.toString(), month, year);
 
@@ -107,7 +111,6 @@ public class TransactionDAO {
         for (Map<String, Object> row : rows) {
             String category = (String) row.get("category");
             double amount = ((Number) row.get("total")).doubleValue();
-
             breakdown.put(category, amount);
             totalSpent += amount;
 
@@ -117,18 +120,17 @@ public class TransactionDAO {
             }
         }
 
-        // Tính tỷ lệ phần trăm
         Map<String, Double> percentageBreakdown = new HashMap<>();
         for (Map.Entry<String, Double> entry : breakdown.entrySet()) {
             double percent = totalSpent > 0 ? (entry.getValue() / totalSpent) * 100 : 0;
-            percentageBreakdown.put(entry.getKey(), Math.round(percent * 100.0) / 100.0); // làm tròn 2 số
+            percentageBreakdown.put(entry.getKey(), Math.round(percent * 100.0) / 100.0);
         }
 
         SpendingStatisticsDTO dto = new SpendingStatisticsDTO();
         dto.setTotalSpent(totalSpent);
         dto.setCategoryBreakdown(breakdown);
         dto.setTopSpendingCategory(topCategory);
-        dto.setCategoryPercentage(percentageBreakdown); // cần bổ sung field này trong DTO nếu chưa có
+        dto.setCategoryPercentage(percentageBreakdown);
 
         return dto;
     }
@@ -145,17 +147,14 @@ public class TransactionDAO {
             sql.append("AND date >= ? ");
             params.add(startDate);
         }
-
         if (endDate != null) {
             sql.append("AND date <= ? ");
             params.add(endDate);
         }
-
         if (minAmount != null) {
             sql.append("AND amount >= ? ");
             params.add(minAmount);
         }
-
         if (maxAmount != null) {
             sql.append("AND amount <= ? ");
             params.add(maxAmount);
@@ -164,6 +163,22 @@ public class TransactionDAO {
         sql.append("ORDER BY date DESC");
 
         return jdbcTemplate.query(sql.toString(), new TransactionMapper(), params.toArray());
+    }
+
+    public List<Transaction> findAllByUserAndAccount(UUID userId, UUID accountId) {
+        String sql = "SELECT * FROM transactions WHERE user_id = ? AND account_id = ?";
+        return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString(), accountId.toString());
+    }
+
+    public Optional<Transaction> findByIdReturnEntity(UUID id) {
+        String sql = "SELECT * FROM transactions WHERE id = ?";
+        List<Transaction> list = jdbcTemplate.query(sql, new TransactionMapper(), id.toString());
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
+    public int clearAccountId(UUID accountId) {
+        String sql = "UPDATE transactions SET account_id = NULL WHERE account_id = ?";
+        return jdbcTemplate.update(sql, accountId.toString());
     }
 
 }

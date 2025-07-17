@@ -3,6 +3,7 @@ package com.example.service;
 import com.example.dto.LoginRequestDTO;
 import com.example.dto.LoginResponseDTO;
 import com.example.entity.User;
+import com.example.repository.AccountDAO;
 import com.example.repository.BudgetDAO;
 import com.example.repository.TransactionDAO;
 import com.example.repository.UserDAO;
@@ -19,6 +20,7 @@ public class UserService {
     private final UserDAO userDao;
     private final TransactionDAO transactionDAO;
     private final BudgetDAO budgetDAO;
+    private final AccountDAO accountDAO;
 
     public List<User> getAll() {
         return userDao.findAll();
@@ -51,6 +53,7 @@ public class UserService {
     public boolean deleteUser(UUID id) {
         transactionDAO.deleteByUserId(id);
         budgetDAO.deleteByUserId(id);
+        accountDAO.deleteByUserId(id);
         return userDao.delete(id) > 0;
     }
 

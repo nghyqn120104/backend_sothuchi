@@ -11,7 +11,7 @@ import com.example.enums.TransactionCategory;
 import com.example.enums.TransactionType;
 
 public class TransactionMapper implements RowMapper<Transaction> {
-    // Mapping
+
     @Override
     public Transaction mapRow(ResultSet rs, int rowNum) throws SQLException {
         Transaction t = new Transaction();
@@ -22,6 +22,15 @@ public class TransactionMapper implements RowMapper<Transaction> {
         t.setType(TransactionType.valueOf(rs.getString("type")));
         t.setCategory(TransactionCategory.valueOf(rs.getString("category")));
         t.setUserId(UUID.fromString(rs.getString("user_id")));
+
+        // Kiểm tra account_id có null không
+        String accountIdStr = rs.getString("account_id");
+        if (accountIdStr != null) {
+            t.setAccountId(UUID.fromString(accountIdStr));
+        } else {
+            t.setAccountId(null);
+        }
+
         return t;
     }
 }

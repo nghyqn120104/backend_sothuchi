@@ -23,11 +23,12 @@ public class TransactionReportService {
 
     public byte[] generateSpendingReport(UUID userId, int month, int year, String format) {
         String sql = """
-                    SELECT date, category, description, amount
-                    FROM transactions
-                    WHERE user_id = ? AND type = 'EXPENSE'
-                      AND MONTH(date) = ? AND YEAR(date) = ?
-                    ORDER BY date
+                    SELECT t.date, t.category, t.description, t.amount, a.name AS account_name
+                    FROM transactions t
+                    LEFT JOIN accounts a ON t.account_id = a.id
+                    WHERE t.user_id = ? AND t.type = 'EXPENSE'
+                      AND MONTH(t.date) = ? AND YEAR(t.date) = ?
+                    ORDER BY t.date
                 """;
 
         List<Map<String, Object>> transactions = jdbcTemplate.queryForList(sql, userId.toString(), month, year);
@@ -54,16 +55,18 @@ public class TransactionReportService {
             document.add(new Paragraph("Báo cáo chi tiêu tháng " + month + "/" + year, font));
             document.add(Chunk.NEWLINE);
 
-            PdfPTable table = new PdfPTable(4);
-            table.setWidths(new float[] { 3, 3, 5, 2 });
+            PdfPTable table = new PdfPTable(5);
+            table.setWidths(new float[] { 4, 4, 4, 4, 4 });
             table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph("Ngày", font)));
             table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph("Danh mục", font)));
             table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph("Mô tả", font)));
             table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph("Số tiền", font)));
+            table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph("Nguồn giao dịch", font)));
 
             double total = 0;
 
             for (Map<String, Object> t : transactions) {
+                String accountName = t.get("account_name") != null ? t.get("account_name").toString() : "N/A";
                 table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph(t.get("date").toString(), font)));
                 table.addCell(
                         new com.itextpdf.text.pdf.PdfPCell(new Paragraph(String.valueOf(t.get("category")), font)));
@@ -71,6 +74,7 @@ public class TransactionReportService {
                         new com.itextpdf.text.pdf.PdfPCell(new Paragraph(String.valueOf(t.get("description")), font)));
                 double amount = ((Number) t.get("amount")).doubleValue();
                 table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph(String.format("%,.0f", amount), font)));
+                table.addCell(new com.itextpdf.text.pdf.PdfPCell(new Paragraph(accountName, font)));
                 total += amount;
             }
 
