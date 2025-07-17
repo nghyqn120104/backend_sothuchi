@@ -50,7 +50,7 @@ public class BudgetDAO {
 
     // Lấy tất cả ngân sách theo user
     public List<Budget> findAllByUser(UUID userId) {
-        String sql = "SELECT * FROM budgets WHERE user_id = ?";
+        String sql = "SELECT * FROM budgets WHERE user_id = ? ORDER BY category";
         return jdbc.query(sql, new BudgetMapper(), userId.toString());
     }
 

@@ -16,7 +16,7 @@ public class AccountDAO {
     private final JdbcTemplate jdbc;
 
     public List<Account> findAllByUser(UUID userId) {
-        String sql = "SELECT * FROM accounts WHERE user_id = ?";
+        String sql = "SELECT * FROM accounts WHERE user_id = ? ORDER BY name";
         return jdbc.query(sql, new AccountMapper(), userId.toString());
     }
 

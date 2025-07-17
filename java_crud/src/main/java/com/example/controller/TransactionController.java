@@ -23,8 +23,11 @@ public class TransactionController {
     private final TransactionReportService reportService;
 
     @GetMapping("/user/{userId}")
-    public List<Transaction> getByUser(@PathVariable UUID userId) {
-        return transactionService.getByUser(userId);
+    public List<Transaction> getByUser(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return transactionService.getByUserPaged(userId, page, size);
     }
 
     @PostMapping
@@ -82,8 +85,12 @@ public class TransactionController {
     }
 
     @GetMapping("/user/{userId}/account/{accountId}")
-    public List<Transaction> getByUserAndAccount(@PathVariable UUID userId, @PathVariable UUID accountId) {
-        return transactionService.getByUserAndAccount(userId, accountId);
+    public List<Transaction> getByUserAndAccount(
+            @PathVariable UUID userId,
+            @PathVariable UUID accountId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return transactionService.getByUserAndAccountPaged(userId, accountId, page, size);
     }
 
 }
