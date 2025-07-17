@@ -21,8 +21,9 @@ public class TransactionService {
     private final TransactionDAO transactionDAO;
     private final AccountDAO accountDAO;
 
-    public List<Transaction> getByUser(UUID userId) {
-        return transactionDAO.findAllByUser(userId);
+    public List<Transaction> getByUserPaged(UUID userId, int page, int size) {
+        int offset = page * size;
+        return transactionDAO.findAllByUserPaged(userId, size, offset);
     }
 
     public boolean create(Transaction t) {
@@ -169,7 +170,8 @@ public class TransactionService {
         return transactionDAO.search(userId, startDate, endDate, minAmount, maxAmount);
     }
 
-    public List<Transaction> getByUserAndAccount(UUID userId, UUID accountId) {
-        return transactionDAO.findAllByUserAndAccount(userId, accountId);
+    public List<Transaction> getByUserAndAccountPaged(UUID userId, UUID accountId, int page, int size) {
+        int offset = page * size;
+        return transactionDAO.findAllByUserAndAccountPaged(userId, accountId, size, offset);
     }
 }

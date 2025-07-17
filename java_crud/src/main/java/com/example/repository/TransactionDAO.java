@@ -18,8 +18,13 @@ public class TransactionDAO {
     private final JdbcTemplate jdbcTemplate;
 
     public List<Transaction> findAllByUser(UUID userId) {
-        String sql = "SELECT * FROM transactions WHERE user_id = ?";
+        String sql = "SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC";
         return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString());
+    }
+
+    public List<Transaction> findAllByUserPaged(UUID userId, int limit, int offset) {
+        String sql = "SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC LIMIT ? OFFSET ?";
+        return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString(), limit, offset);
     }
 
     public int insert(Transaction t) {
@@ -165,9 +170,9 @@ public class TransactionDAO {
         return jdbcTemplate.query(sql.toString(), new TransactionMapper(), params.toArray());
     }
 
-    public List<Transaction> findAllByUserAndAccount(UUID userId, UUID accountId) {
-        String sql = "SELECT * FROM transactions WHERE user_id = ? AND account_id = ?";
-        return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString(), accountId.toString());
+    public List<Transaction> findAllByUserAndAccountPaged(UUID userId, UUID accountId, int limit, int offset) {
+        String sql = "SELECT * FROM transactions WHERE user_id = ? AND account_id = ? ORDER BY date DESC LIMIT ? OFFSET ?";
+        return jdbcTemplate.query(sql, new TransactionMapper(), userId.toString(), accountId.toString(), limit, offset);
     }
 
     public Optional<Transaction> findByIdReturnEntity(UUID id) {
