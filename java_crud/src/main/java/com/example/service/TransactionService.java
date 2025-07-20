@@ -2,7 +2,6 @@ package com.example.service;
 
 import com.example.entity.Transaction;
 import com.example.enums.TransactionCategory;
-import com.example.enums.TransactionType;
 import com.example.repository.AccountDAO;
 import com.example.repository.TransactionDAO;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -20,6 +21,7 @@ public class TransactionService {
 
     private final TransactionDAO transactionDAO;
     private final AccountDAO accountDAO;
+    private final AccountService accountService;
 
     public List<Transaction> getByUserPaged(UUID userId, int page, int size) {
         int offset = page * size;
@@ -29,7 +31,6 @@ public class TransactionService {
     public boolean create(Transaction t) {
         t.setId(UUID.randomUUID());
 
-        // 🔒 Kiểm tra accountId thuộc về user
         if (t.getAccountId() != null) {
             boolean isValidAccount = accountDAO
                     .findById(t.getAccountId())
@@ -40,14 +41,8 @@ public class TransactionService {
         }
 
         boolean ok = transactionDAO.insert(t) > 0;
-
-        if (ok && t.getAccountId() != null) {
-            accountDAO.findById(t.getAccountId()).ifPresent(account -> {
-                double delta = t.getType() == TransactionType.INCOME ? t.getAmount() : -t.getAmount();
-                account.setBalance(account.getBalance() + delta);
-                accountDAO.update(account);
-            });
-        }
+        if (ok && t.getAccountId() != null)
+            accountService.recalculateAndUpdateCurrentBalance(t.getAccountId());
 
         return ok;
     }
@@ -58,9 +53,8 @@ public class TransactionService {
         if (oldOpt.isEmpty())
             return false;
 
-        Transaction old = oldOpt.get();
+        Transaction oldT = oldOpt.get();
 
-        // 🔒 Kiểm tra account mới (nếu có) có thuộc user không
         if (newT.getAccountId() != null) {
             boolean isValidAccount = accountDAO
                     .findById(newT.getAccountId())
@@ -70,34 +64,18 @@ public class TransactionService {
                 return false;
         }
 
-        // ✅ Hoàn lại tiền cho account cũ
-        if (old.getAccountId() != null) {
-            accountDAO.findById(old.getAccountId()).ifPresent(account -> {
-                double delta = switch (old.getType()) {
-                    case INCOME -> -old.getAmount();
-                    case EXPENSE -> old.getAmount();
-                    default -> 0;
-                };
-                account.setBalance(account.getBalance() + delta);
-                accountDAO.update(account);
-            });
-        }
-
-        // ✅ Áp dụng tiền cho account mới
-        if (newT.getAccountId() != null) {
-            accountDAO.findById(newT.getAccountId()).ifPresent(account -> {
-                double delta = switch (newT.getType()) {
-                    case INCOME -> newT.getAmount();
-                    case EXPENSE -> -newT.getAmount();
-                    default -> 0;
-                };
-                account.setBalance(account.getBalance() + delta);
-                accountDAO.update(account);
-            });
-        }
-
         newT.setId(id);
-        return transactionDAO.update(newT) > 0;
+        boolean ok = transactionDAO.update(newT) > 0;
+
+        // Cập nhật balance cả tài khoản cũ và mới nếu khác
+        if (ok) {
+            if (oldT.getAccountId() != null)
+                accountService.recalculateAndUpdateCurrentBalance(oldT.getAccountId());
+            if (newT.getAccountId() != null && !newT.getAccountId().equals(oldT.getAccountId()))
+                accountService.recalculateAndUpdateCurrentBalance(newT.getAccountId());
+        }
+
+        return ok;
     }
 
     @Transactional
@@ -106,42 +84,38 @@ public class TransactionService {
         if (transactionOpt.isEmpty())
             return false;
 
-        Transaction t = transactionOpt.get();
-
-        // Xóa transaction trước
+        Transaction transaction = transactionOpt.get();
         boolean ok = transactionDAO.delete(id) > 0;
 
-        if (ok && t.getAccountId() != null) {
-            accountDAO.findById(t.getAccountId()).ifPresent(account -> {
-                double delta = switch (t.getType()) {
-                    case INCOME -> -t.getAmount(); // Hoàn lại tiền đã cộng
-                    case EXPENSE -> t.getAmount(); // Hoàn lại tiền đã trừ
-                    default -> 0; // Nếu type không rõ, không thay đổi
-                };
-
-                account.setBalance(account.getBalance() + delta);
-                accountDAO.update(account);
-            });
+        if (ok && transaction.getAccountId() != null) {
+            accountService.recalculateAndUpdateCurrentBalance(transaction.getAccountId());
         }
 
         return ok;
     }
 
     public boolean deleteByUser(UUID userId) {
+        // Lấy toàn bộ giao dịch của user
         List<Transaction> transactions = transactionDAO.findAllByUser(userId);
 
-        // Hoàn lại số dư
+        // Ghi nhận các accountId bị ảnh hưởng
+        Set<UUID> affectedAccountIds = new HashSet<>();
         for (Transaction t : transactions) {
-            if (t.getAccountId() != null) {
-                accountDAO.findById(t.getAccountId()).ifPresent(account -> {
-                    double delta = t.getType() == TransactionType.INCOME ? -t.getAmount() : t.getAmount();
-                    account.setBalance(account.getBalance() + delta);
-                    accountDAO.update(account);
-                });
+            if (t.getAccountId() != null)
+                affectedAccountIds.add(t.getAccountId());
+        }
+
+        // Xoá tất cả giao dịch
+        boolean ok = transactionDAO.deleteByUserId(userId) > 0;
+
+        // Cập nhật lại balance cho các account liên quan
+        if (ok) {
+            for (UUID accountId : affectedAccountIds) {
+                accountService.recalculateAndUpdateCurrentBalance(accountId);
             }
         }
 
-        return transactionDAO.deleteByUserId(userId) > 0;
+        return ok;
     }
 
     public boolean exists(UUID id) {

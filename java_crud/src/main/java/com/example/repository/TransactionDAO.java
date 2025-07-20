@@ -181,9 +181,26 @@ public class TransactionDAO {
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
 
-    public int clearAccountId(UUID accountId) {
-        String sql = "UPDATE transactions SET account_id = NULL WHERE account_id = ?";
-        return jdbcTemplate.update(sql, accountId.toString());
+    // Tính số tiền kiếm được cho tài khoản
+    public double sumIncomeByAccount(UUID accountId) {
+        String sql = "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ? AND type = 'INCOME'";
+        return jdbcTemplate.queryForObject(sql, Double.class, accountId.toString());
+    }
+
+    // Tính số tiền chi tiêu cho tài khoản
+    public double sumExpenseByAccount(UUID accountId) {
+        String sql = "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ? AND type = 'EXPENSE'";
+        return jdbcTemplate.queryForObject(sql, Double.class, accountId.toString());
+    }
+
+    public int detachAccountAndNote(UUID accountId, String note) {
+        String sql = """
+                    UPDATE transactions
+                    SET account_id = NULL,
+                        description = CONCAT(description, ' [' || ? || ']')
+                    WHERE account_id = ?
+                """;
+        return jdbcTemplate.update(sql, note, accountId.toString());
     }
 
 }
