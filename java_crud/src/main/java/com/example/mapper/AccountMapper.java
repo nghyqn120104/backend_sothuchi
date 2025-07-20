@@ -15,7 +15,8 @@ public class AccountMapper implements RowMapper<Account> {
         account.setUserId(UUID.fromString(rs.getString("user_id")));
         account.setName(rs.getString("name"));
         account.setType(rs.getString("type"));
-        account.setBalance(rs.getDouble("balance"));
+        account.setInitialBalance(rs.getDouble("initial_balance"));
+        account.setCurrentBalance(rs.getDouble("current_balance"));
         return account;
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class AccountService {
     private final AccountDAO accountDAO;
     private final TransactionDAO transactionDAO;
+    private final SavingGoalService savingGoalService;
 
     public List<Account> getByUser(UUID userId) {
         return accountDAO.findAllByUser(userId);
@@ -53,8 +55,16 @@ public class AccountService {
     }
 
     public boolean delete(UUID id) {
-        // Xoá tài khoản → gỡ liên kết trong transaction
-        transactionDAO.clearAccountId(id); // 👇 bước này cần thêm
+        Optional<Account> accOpt = accountDAO.findById(id);
+        if (accOpt.isEmpty())
+            return false;
+
+        Account acc = accOpt.get();
+
+        // Thêm ghi chú mô tả
+        String note = "Trước đây thuộc tài khoản: " + acc.getName();
+        transactionDAO.detachAccountAndNote(id, note);
+
         return accountDAO.delete(id) > 0;
     }
 
@@ -72,14 +82,50 @@ public class AccountService {
         Account from = fromOpt.get();
         Account to = toOpt.get();
 
-        if (from.getBalance() < amount)
+        if (from.getInitialBalance() < amount)
             return false;
 
-        from.setBalance(from.getBalance() - amount);
-        to.setBalance(to.getBalance() + amount);
+        from.setInitialBalance(from.getInitialBalance() - amount);
+        to.setInitialBalance(to.getInitialBalance() + amount);
 
         accountDAO.update(from);
         accountDAO.update(to);
         return true;
     }
+
+    // Lấy thông tin số dư tài khoản
+    // Bao gồm: số dư ban đầu, tổng thu nhập, tổng chi tiêu, số dư hiện tại
+    // Số dư hiện tại = Số dư ban đầu + Tổng thu nhập - Tổng
+    public Map<String, Object> getBalanceInfo(UUID accountId) {
+        Optional<Account> accOpt = accountDAO.findById(accountId);
+        if (accOpt.isEmpty())
+            return Map.of("error", "Account not found");
+
+        Account acc = accOpt.get();
+        double income = transactionDAO.sumIncomeByAccount(accountId);
+        double expense = transactionDAO.sumExpenseByAccount(accountId);
+        double currentBalance = acc.getInitialBalance() + income - expense;
+
+        savingGoalService.checkGoalCompletion(accountId);
+
+        return Map.of(
+                "initialBalance", acc.getInitialBalance(),
+                "totalIncome", income,
+                "totalExpense", expense,
+                "currentBalance", currentBalance);
+    }
+
+    public void recalculateAndUpdateCurrentBalance(UUID accountId) {
+        Optional<Account> accOpt = accountDAO.findById(accountId);
+        if (accOpt.isEmpty())
+            return;
+
+        double income = transactionDAO.sumIncomeByAccount(accountId);
+        double expense = transactionDAO.sumExpenseByAccount(accountId);
+        double initial = accOpt.get().getInitialBalance();
+
+        double current = initial + income - expense;
+        accountDAO.updateCurrentBalance(accountId, current);
+    }
+
 }

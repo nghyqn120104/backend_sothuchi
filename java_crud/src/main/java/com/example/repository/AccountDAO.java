@@ -27,21 +27,21 @@ public class AccountDAO {
     }
 
     public int insert(Account a) {
-        String sql = "INSERT INTO accounts (id, user_id, name, type, balance) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO accounts (id, user_id, name, type, initial_balance) VALUES (?, ?, ?, ?, ?)";
         return jdbc.update(sql,
                 a.getId().toString(),
                 a.getUserId().toString(),
                 a.getName(),
                 a.getType(),
-                a.getBalance());
+                a.getInitialBalance());
     }
 
     public int update(Account a) {
-        String sql = "UPDATE accounts SET name = ?, type = ?, balance = ? WHERE id = ?";
+        String sql = "UPDATE accounts SET name = ?, type = ?, initial_balance = ? WHERE id = ?";
         return jdbc.update(sql,
                 a.getName(),
                 a.getType(),
-                a.getBalance(),
+                a.getInitialBalance(),
                 a.getId().toString());
     }
 
@@ -65,6 +65,16 @@ public class AccountDAO {
     public int deleteByUserId(UUID userId) {
         String sql = "DELETE FROM accounts WHERE user_id = ?";
         return jdbc.update(sql, userId.toString());
+    }
+
+    public int updateInitialBalance(UUID accountId, double newInitialBalance) {
+        String sql = "UPDATE accounts SET initial_balance = ? WHERE id = ?";
+        return jdbc.update(sql, newInitialBalance, accountId.toString());
+    }
+
+    public int updateCurrentBalance(UUID accountId, double currentBalance) {
+        String sql = "UPDATE accounts SET current_balance = ? WHERE id = ?";
+        return jdbc.update(sql, currentBalance, accountId.toString());
     }
 
 }

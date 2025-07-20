@@ -59,4 +59,9 @@ public class AccountController {
                 : ResponseEntity.badRequest().body("Chuyển tiền thất bại");
     }
 
+    @GetMapping("/{id}/balance")
+    public ResponseEntity<?> getBalance(@PathVariable UUID id) {
+        return ResponseEntity.ok(accountService.getBalanceInfo(id));
+    }
+
 }
